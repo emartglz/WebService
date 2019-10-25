@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -8,8 +9,7 @@
 #include <arpa/inet.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <stdlib.h>
-
+#include "../include/client.h"
 
 
 int server(int argc, char **argv)
@@ -18,7 +18,7 @@ int server(int argc, char **argv)
     struct sockaddr_in client_addr;
 
     char* serving_directory = malloc(100 * sizeof(char));
-    
+
 
     fd_set read_set;
     fd_set write_set;
@@ -61,11 +61,14 @@ int server(int argc, char **argv)
     }
 
     int client_len = sizeof(client_addr);
-    int n;
+    pthread_t client_threads[5];
+
+
+    int connfd = 0;
     while(1)
     {
         printf("--> Waiting for conection...\n");
-        int connfd = accept(listefd, (struct sockaddr *)&client_addr, &client_len);
+        connfd = accept(listefd, (struct sockaddr *)&client_addr, &client_len);
         write(STDOUT_FILENO, "accept\n", 7);
         if(connfd < 0)
         {
@@ -74,9 +77,14 @@ int server(int argc, char **argv)
         }
 
         printf("--> Connection established with: %s.\n", inet_ntoa(client_addr.sin_addr));
-        write(connfd, "TIZA", 4);
+
+        char buffer[4096];
+        int readcount = read(connfd, buffer, 4096);
+        printf("%s", buffer);
+
+        client(serving_directory, connfd);    
         close(connfd);
     }
-    // close(connfd);
+    close(connfd);
     printf("--> Socket closed.\n");
 }
