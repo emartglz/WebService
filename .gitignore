@@ -1,0 +1,6 @@
+*.o
+bin/WebService
+a.out
+.vscode/
+*.txt
+a.py
