@@ -1,9 +1,9 @@
 #include <stdio.h>
-
+#include "../include/server.h"
 
 int main(int argc, char **argv)
 {
-    printf("Hola Mundo");
+    server(argc, argv);
 
     return 0;
 }

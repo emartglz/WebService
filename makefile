@@ -54,7 +54,7 @@ clean:
 compile: $(NECESSARY_DIRS) $(TARGET)
 
 run: compile
-	./$(TARGET)
+	./$(TARGET) 8000 /
 
 test: $(NECESSARY_DIRS) $(TESTS_NECESSARY_DIRS) $(TESTS_TARGETS)
 	@for target in $(TESTS_TARGETS_) ; do \
