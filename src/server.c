@@ -11,14 +11,47 @@
 #include <stdlib.h>
 #include "../include/client.h"
 
+#define BUFFER 8096
+
+
+void get_directory_path(char* request, char* path)
+{
+    char* path_init = strchr(request, ' ');
+    printf("%s", path_init);
+
+    int pos = 0;
+    int i = 1;
+    while(path_init[i] != ' ')
+    {
+        if(path_init[i] == '%')
+        {
+            if(path_init[i + 1] == '2')
+            {
+                if(path_init[i + 2] == '0')
+                {
+                    path[pos] = ' ';
+                    i += 2;
+                }
+            }
+        }
+        else
+        {
+            path[pos] = path_init[i];
+        }
+        pos++;
+        i++;
+    }
+    path[i - 1] = '\000';
+    printf("------------+-->%s\n", path);
+    // return path;
+}
 
 int server(int argc, char **argv)
 {
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
 
-    char* serving_directory = malloc(100 * sizeof(char));
-
+    char serving_directory[BUFFER];
 
     fd_set read_set;
     fd_set write_set;
@@ -61,8 +94,9 @@ int server(int argc, char **argv)
     }
 
     int client_len = sizeof(client_addr);
-    pthread_t client_threads[5];
 
+    char path[BUFFER];
+    char serving_directory_temp[BUFFER];
 
     int connfd = 0;
     while(1)
@@ -78,11 +112,30 @@ int server(int argc, char **argv)
 
         printf("--> Connection established with: %s.\n", inet_ntoa(client_addr.sin_addr));
 
-        char buffer[4096];
-        int readcount = read(connfd, buffer, 4096);
-        printf("%s", buffer);
+        char buffer[BUFFER];
+        int readcount = read(connfd, buffer, BUFFER);
+        printf("--> recibing request\n");
 
-        client(serving_directory, connfd);    
+        get_directory_path(buffer, path);
+        strcpy(serving_directory_temp, path);
+        if(strcmp(serving_directory_temp, "/favicon.ico\0") == 0)
+        {
+            printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+            close(connfd);
+            continue;
+        }
+
+        if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
+        {
+            strcpy(serving_directory, serving_directory_temp);
+            client_dir(serving_directory, connfd);
+        }
+        else
+        {
+            client_file(serving_directory_temp, connfd);
+        }
+        
+         
         close(connfd);
     }
     close(connfd);
