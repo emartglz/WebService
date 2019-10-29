@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include "../include/client.h"
 
-#define BUFFER 8096
+#define BUFFER 10000
 
 
 void get_directory_path(char* request, char* path)
@@ -41,7 +41,7 @@ void get_directory_path(char* request, char* path)
         pos++;
         i++;
     }
-    path[i - 1] = '\000';
+    path[pos] = '\000';
     printf("------------+-->%s\n", path);
 }
 
@@ -60,6 +60,23 @@ void comprobate_path(char *new_path, char *origin_path)
             return;
         }
     }
+}
+
+int get_sort_from_path(char* path)
+{
+    if(path[strlen(path) - 7] == '?')
+        if(path[strlen(path) - 6] == 's')
+            if(path[strlen(path) - 5] == 'o')
+                if(path[strlen(path) - 4] == 'r')
+                    if(path[strlen(path) - 3] == 't')
+                        if(path[strlen(path) - 2] == '=')
+                        {
+                            char s[1];
+                            s[0] = path[strlen(path) - 1];
+                            path[strlen(path) - 7] = '\000';
+                            return atoi(s);
+                        }
+    return 0;
 }
 
 int server(int argc, char **argv)
@@ -143,12 +160,13 @@ int server(int argc, char **argv)
             continue;
         }
 
+        int sort = get_sort_from_path(serving_directory_temp);
         comprobate_path(serving_directory_temp, argv[2]);
-
+        
         if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
         {
             strcpy(serving_directory, serving_directory_temp);
-            client_dir(serving_directory, connfd, strcmp(serving_directory, argv[2]));
+            client_dir(serving_directory, connfd, strcmp(serving_directory, argv[2]), sort);
         }
         else
         {
