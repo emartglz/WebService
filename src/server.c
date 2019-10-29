@@ -17,7 +17,7 @@
 void get_directory_path(char* request, char* path)
 {
     char* path_init = strchr(request, ' ');
-    printf("%s", path_init);
+    // printf("%s", path_init);
 
     int pos = 0;
     int i = 1;
@@ -43,7 +43,23 @@ void get_directory_path(char* request, char* path)
     }
     path[i - 1] = '\000';
     printf("------------+-->%s\n", path);
-    // return path;
+}
+
+void comprobate_path(char *new_path, char *origin_path)
+{
+    if(strlen(new_path) < strlen(origin_path))
+    {
+        strcpy(new_path, origin_path);
+        return;
+    }
+    for(int i = 0; i < strlen(origin_path); i++)
+    {
+        if(new_path[i] != origin_path[i])
+        {
+            strcpy(new_path, origin_path);
+            return;
+        }
+    }
 }
 
 int server(int argc, char **argv)
@@ -63,7 +79,9 @@ int server(int argc, char **argv)
         exit(1);
     }
     int portno = atoi(argv[1]);
+    printf("Listening in port %d\n", portno);
     strcpy (serving_directory, argv[2]);
+    printf("Serving directory \"%s\"\n", serving_directory);
 
 
     int listefd = socket(AF_INET, SOCK_STREAM, 0);
@@ -120,15 +138,17 @@ int server(int argc, char **argv)
         strcpy(serving_directory_temp, path);
         if(strcmp(serving_directory_temp, "/favicon.ico\0") == 0)
         {
-            printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+            // printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
             close(connfd);
             continue;
         }
 
+        comprobate_path(serving_directory_temp, argv[2]);
+
         if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
         {
             strcpy(serving_directory, serving_directory_temp);
-            client_dir(serving_directory, connfd);
+            client_dir(serving_directory, connfd, strcmp(serving_directory, argv[2]));
         }
         else
         {

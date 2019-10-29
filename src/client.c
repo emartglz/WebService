@@ -37,7 +37,7 @@ void entry_html(char *directory, struct dirent *entry, int client_fd)
 
     char* type = get_type(entry);
 
-    printf("%s. %s. %s.\n", type, dir, name);
+    // printf("%s. %s. %s.\n", type, dir, name);
 
     print("<tr>\n				<td>[", client_fd);
     print(type, client_fd);
@@ -53,7 +53,7 @@ void entry_html(char *directory, struct dirent *entry, int client_fd)
     print("</a></td>\n			</tr>", client_fd);
 }
 
-void init_html(char *directory, int client_fd)
+void init_html(char *directory, int client_fd, int origin_path)
 {
     print("HTTP/1.0 \r\n\n", client_fd);
     print("<html>\n    <head>\n        <title>", client_fd);
@@ -61,9 +61,12 @@ void init_html(char *directory, int client_fd)
     print("</title>\n	</head>\n	<body>\n		<h1>Content of directory \"", client_fd);
     print(directory, client_fd);
     print("\"</h1>\n\n		<table>\n			<tr>\n				<th>Type</th>\n				<th>Filename</th>\n			</tr>", client_fd);
-    print("<tr>\n				<td>[dir]</td>\n				<td><a href=\"", client_fd);
-    print(directory, client_fd);
-    print("../\">BACK/</a></td>\n			</tr>", client_fd);
+    if(origin_path != 0)
+    {
+        print("<tr>\n				<td>[dir]</td>\n				<td><a href=\"", client_fd);
+        print(directory, client_fd);
+        print("../\">BACK/</a></td>\n			</tr>", client_fd);
+    }
 }
 
 void end_html(int client_fd)
@@ -71,14 +74,13 @@ void end_html(int client_fd)
     print("	</body>\n</html>", client_fd);
 }
 
-void client_dir(char* directory, int client_fd)
+void client_dir(char* directory, int client_fd, int origin_path)
 {
     struct DIR *dir = opendir(directory); 
     printf("--> Open %s succefuly\n", directory);
     struct dirent *entry;
     
-    init_html(directory, client_fd);
-    printf("--> init\n");
+    init_html(directory, client_fd, origin_path);
     while((entry = readdir(dir)) != NULL)
     {
         if(entry->d_name[0] == '.')
@@ -104,7 +106,7 @@ void client_file(char* file, int client_fd)
     print(temp, client_fd);
     print("Content-Disposition: attachment;\r\n\r\n", client_fd);
 
-    while(sendfile(client_fd, file_fd, NULL, 128))
+    while(sendfile(client_fd, file_fd, NULL, s.st_blksize))
     {
     }
     close(file_fd);
