@@ -32,7 +32,7 @@ Serving directory "/home/javier"
 
 y hasta aqui tienen 3 puntos en el proyecto
 
-9. Mostrar información adicional de los archivos además del nombre (fecha de modificación, tamaño, permisos, etc.) [1pt] 
+9. X Mostrar información adicional de los archivos además del nombre (fecha de modificación, tamaño, permisos, etc.) [1pt] 
 
 * esta funcionalidad incluye la posibilidad de ordenar por cada uno de esos parámetros (nombre, fecha, tamaño, etc.)
 
