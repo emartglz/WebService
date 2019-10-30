@@ -133,49 +133,61 @@ int server(int argc, char **argv)
     char path[BUFFER];
     char serving_directory_temp[BUFFER];
 
+    fd_set clients_fd;
+    fd_set ready_clients_fd;
+
     int connfd = 0;
+
+    FD_ZERO(&clients_fd);
+    FD_ZERO(&ready_clients_fd);
+    FD_SET(listefd, &clients_fd);
+    
+
     while(1)
     {
-        printf("--> Waiting for conection...\n");
-        connfd = accept(listefd, (struct sockaddr *)&client_addr, &client_len);
-        write(STDOUT_FILENO, "accept\n", 7);
-        if(connfd < 0)
+        ready_clients_fd = clients_fd;
+        select(listefd + 1, &ready_clients_fd, &clients_fd, NULL, 1);
+        if(FD_ISSET(listefd, &ready_clients_fd))
         {
-            printf("ERROR on accept");
-            return -1;
-        }
+            connfd = accept(listefd, (struct sockaddr *)&client_addr, &client_len);
+            write(STDOUT_FILENO, "accept\n", 7);
+            if(connfd < 0)
+            {
+                printf("ERROR on accept");
+                return -1;
+            }
 
-        printf("--> Connection established with: %s.\n", inet_ntoa(client_addr.sin_addr));
+            printf("--> Connection established with: %s.\n", inet_ntoa(client_addr.sin_addr));
 
-        char buffer[BUFFER];
-        int readcount = read(connfd, buffer, BUFFER);
-        printf("--> recibing request\n");
 
-        get_directory_path(buffer, path);
-        strcpy(serving_directory_temp, path);
-        if(strcmp(serving_directory_temp, "/favicon.ico\0") == 0)
-        {
-            // printf("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
+            char buffer[BUFFER];
+            int readcount = read(connfd, buffer, BUFFER);
+            printf("--> recibing request\n");
+
+            get_directory_path(buffer, path);
+            strcpy(serving_directory_temp, path);
+            if(strcmp(serving_directory_temp, "/favicon.ico\0") == 0)
+            {
+                close(connfd);
+                continue;
+            }
+
+            int sort = get_sort_from_path(serving_directory_temp);
+            comprobate_path(serving_directory_temp, argv[2]);
+
+            if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
+            {
+                strcpy(serving_directory, serving_directory_temp);
+                client_dir(serving_directory, connfd, strcmp(serving_directory, argv[2]), sort);
+            }
+            else
+            {
+                client_file(serving_directory_temp, connfd);
+            }
             close(connfd);
-            continue;
         }
-
-        int sort = get_sort_from_path(serving_directory_temp);
-        comprobate_path(serving_directory_temp, argv[2]);
-        
-        if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
-        {
-            strcpy(serving_directory, serving_directory_temp);
-            client_dir(serving_directory, connfd, strcmp(serving_directory, argv[2]), sort);
-        }
-        else
-        {
-            client_file(serving_directory_temp, connfd);
-        }
-        
-         
-        close(connfd);
     }
+    
     close(connfd);
     printf("--> Socket closed.\n");
 }
