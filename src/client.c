@@ -35,7 +35,7 @@ char* get_type(struct dirent *entry)
     return "FILE";
 }
 
-unsigned int get_size(char* size_s, unsigned int size)
+long int get_size(char* size_s, unsigned int size)
 {
     strcpy(size_s, "Bytes");
     unsigned int temp = size;
@@ -80,13 +80,27 @@ void entry_html(char *directory, struct entry_stat entry, int client_fd)
     print("</a></td>\n", client_fd);
 
     char date[BUFFERSIZE];
-    strftime(date, 10, "%d-%m-%y", gmtime(&(entry.s.st_ctime)));
-    dprintf(client_fd, "<td>\n%s\n<td>\n", date);
+    dprintf(client_fd, "<td>\n%s\n</td>\n",  ctime(&entry.s.st_mtime));
 
     char size_s[5];
-    dprintf(client_fd, "<td>\n%ld%s\n<td>\n", get_size(size_s, entry.s.st_size), size_s);
+    dprintf(client_fd, "<td>\n%ld%s\n</td>\n", get_size(size_s, entry.s.st_size), size_s);
 
-    dprintf(client_fd, "<td>\n%d\n<td>\n", entry.s.st_mode);
+    char perm[11];
+    int index = 0;
+    mode_t per = entry.s.st_mode;
+    
+    perm[index++] = S_ISDIR(per) ? 'd' : '-'; 
+    perm[index++] = per & S_IRUSR ? 'r' : '-';
+    perm[index++] = per & S_IWUSR ? 'w' : '-';
+    perm[index++] = per & S_IXUSR ? 'x' : '-';
+    perm[index++] = per & S_IRGRP ? 'r' : '-';
+    perm[index++] = per & S_IWGRP ? 'w' : '-';
+    perm[index++] = per & S_IXGRP ? 'x' : '-';
+    perm[index++] = per & S_IROTH ? 'r' : '-';
+    perm[index++] = per & S_IWOTH ? 'w' : '-';
+    perm[index++] = per & S_IXOTH ? 'x' : '-';
+    perm[index] = '\000';
+    dprintf(client_fd, "<td>\n%s\n</td>\n", perm);
 
     print("</tr>\n", client_fd);
 }
@@ -96,23 +110,23 @@ void init_html(char *directory, int client_fd, int origin_path)
     dprintf(client_fd, "HTTP/1.0 \r\n");
     dprintf(client_fd, "<html>\n    <head>\n        <title>");
     dprintf(client_fd, "%s", directory);
-    dprintf(client_fd, "</title>\n	</head>\n	<body>\n		<h1>Content of directory \"%s\"</h1>\n\n		<table>\n			<tr>\n				", directory);
+    dprintf(client_fd, "</title>\n	</head>\n	<body>\n		<h1>Content of directory \"%s\"</h1>\n\n		<table border=\"1px\">\n			<tr>\n				", directory);
 
     dprintf(client_fd, "<th><a href=\"%s?sort=1\">Type</a></th>\n", directory);
 
     dprintf(client_fd, "<th><a href=\"%s?sort=2\">FileName</a></th>\n", directory);
 
-    dprintf(client_fd, "<th><a href=\"%s?sort=3\">Modification Date</a></th>\n", directory);
+    dprintf(client_fd, "<th><a href=\"%s?sort=3\">ModificationDate</a></th>\n", directory);
 
     dprintf(client_fd, "<th><a href=\"%s?sort=4\">Size</a></th>\n", directory);
 
-    dprintf(client_fd, "<th><a href=\"%s?sort=5\">Ejquiujmis</a></th>\n", directory);
+    dprintf(client_fd, "<th><a href=\"%s?sort=5\">Permissions</a></th>\n", directory);
 
     print("</tr>", client_fd);
 
     if(origin_path != 0)
     {
-        dprintf(client_fd, "<tr>\n				<td>[DIR]</td>\n				<td><a href=\"%s../\">BACK/</a></td>\n			</tr>", directory);
+        dprintf(client_fd, "<tr>\n				<td>[DIR]</td>\n				<td><a href=\"%s../\">BACK/</a></td>\n			<td></td><td></td><td></td></tr>", directory);
     }
 }
 
@@ -150,7 +164,12 @@ static int sort_size(const void *p1, const void *p2)
     struct entry_stat a = *(struct entry_stat *) p1;
     struct entry_stat b = *(struct entry_stat *) p2;
     
-    return a.s.st_size - b.s.st_size;
+    if(a.s.st_size < b.s.st_size)
+        return -1;
+    if(a.s.st_size == b.s.st_size)
+        return 0;
+    else 
+        return 1;
 }
 
 static int sort_permisions(const void *p1, const void *p2)
@@ -228,9 +247,4 @@ void client_file(char* file, int client_fd)
     char temp[BUFFERSIZE];
     dprintf(client_fd, "Content-length: %ld \r\n", s.st_size);
     print("Content-Disposition: attachment;\r\n\r\n", client_fd);
-
-    while(sendfile(client_fd, file_fd, NULL, s.st_blksize))
-    {
-    }
-    close(file_fd);
 }

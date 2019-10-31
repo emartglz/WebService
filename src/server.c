@@ -9,15 +9,29 @@
 #include <arpa/inet.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/sendfile.h>
 #include "../include/client.h"
 
 #define BUFFER 10000
+
+int files_fd[100];
+int client_files_fd[100];
+int clients[100];
+int files_bytes_sended[100];
+struct stat files_stat[100];
+char serving_directory[BUFFER];
+char path[BUFFER];
+char serving_directory_temp[BUFFER];
+int max = 0;
+fd_set clients_fd;
+fd_set ready_clients_fd;
 
 
 void get_directory_path(char* request, char* path)
 {
     char* path_init = strchr(request, ' ');
-    // printf("%s", path_init);
 
     int pos = 0;
     int i = 1;
@@ -79,12 +93,78 @@ int get_sort_from_path(char* path)
     return 0;
 }
 
+void check_clients()
+{
+    for(int i = 0; i < 100; i++)
+    {
+        if(clients[i] != -1)
+        {
+            if(FD_ISSET(clients[i], &ready_clients_fd))
+            {
+                char buffer[BUFFER];
+                printf("-->waiting for request\n");
+                int readcount = read(clients[i], buffer, BUFFER);
+                printf("--> recibing request\n");
+
+                get_directory_path(buffer, path);
+                strcpy(serving_directory_temp, path);
+                if(strcmp(serving_directory_temp, "/favicon.ico\0") == 0)
+                {
+                    FD_CLR(clients[i], &clients_fd);
+                    close(clients[i]);
+                    clients[i] = -1;
+                    continue;
+                }
+
+                int sort = get_sort_from_path(serving_directory_temp);
+                comprobate_path(serving_directory_temp, serving_directory);
+
+                if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
+                {
+                    printf("-->Dir petition\n");
+                    client_dir(serving_directory_temp, clients[i], strcmp(serving_directory_temp, serving_directory), sort);
+                    
+                    FD_CLR(clients[i], &clients_fd);
+                    close(clients[i]);
+                    clients[i] = -1;
+                }
+                else
+                {
+                    printf("-->File petition\n");
+                    int file_fd = open(serving_directory_temp, O_RDONLY);
+                    printf("--File opened\n");
+                    if(file_fd > max)
+                    {
+                        max = file_fd;
+                    }
+
+                    struct stat s;
+                    fstat(file_fd, &s);
+
+                    for(int j = 0; j < 100; j++)
+                    {
+                        if(files_fd[j] == -1)
+                        {
+                            files_fd[j] = file_fd;
+                            client_files_fd[j] = i;
+                            files_bytes_sended[j] = 0;
+                            files_stat[j] = s;
+                            break;
+                        }
+                    }
+
+                    FD_SET(file_fd, &clients_fd);
+                    client_file(serving_directory_temp, clients[i]);
+                }
+            }
+        }
+    }
+}
+
 int server(int argc, char **argv)
 {
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
-
-    char serving_directory[BUFFER];
 
     fd_set read_set;
     fd_set write_set;
@@ -123,18 +203,12 @@ int server(int argc, char **argv)
         printf("ERROR on binding");
     }
 
-    if(listen(listefd, 5) < 0)
+    if(listen(listefd, 10) < 0)
     {
         printf("ERROR on listen");
     }
 
     int client_len = sizeof(client_addr);
-
-    char path[BUFFER];
-    char serving_directory_temp[BUFFER];
-
-    fd_set clients_fd;
-    fd_set ready_clients_fd;
 
     int connfd = 0;
 
@@ -142,52 +216,98 @@ int server(int argc, char **argv)
     FD_ZERO(&ready_clients_fd);
     FD_SET(listefd, &clients_fd);
     
+    printf("-->Starting files fd\n");
+    for(int i = 0; i < 100; i++)
+    {
+        clients[i] = -1;
+        files_fd[i] = -1;
+        client_files_fd[i] = -1;
+    }
+
+    max = listefd;
 
     while(1)
     {
+        printf("-->loop\n");
         ready_clients_fd = clients_fd;
-        select(listefd + 1, &ready_clients_fd, &clients_fd, NULL, 1);
+        select(max + 1, &ready_clients_fd, NULL, NULL, NULL);
+        printf("-->loop2\n");
         if(FD_ISSET(listefd, &ready_clients_fd))
         {
+            printf("-->waiting\n");
             connfd = accept(listefd, (struct sockaddr *)&client_addr, &client_len);
+            if(connfd > max)
+            {
+                max = connfd;
+            }
             write(STDOUT_FILENO, "accept\n", 7);
             if(connfd < 0)
             {
                 printf("ERROR on accept");
                 return -1;
             }
-
             printf("--> Connection established with: %s.\n", inet_ntoa(client_addr.sin_addr));
 
-
-            char buffer[BUFFER];
-            int readcount = read(connfd, buffer, BUFFER);
-            printf("--> recibing request\n");
-
-            get_directory_path(buffer, path);
-            strcpy(serving_directory_temp, path);
-            if(strcmp(serving_directory_temp, "/favicon.ico\0") == 0)
+            for(int i = 0; i < 100; i++)
             {
-                close(connfd);
-                continue;
+                if(clients[i] == -1)
+                {
+                    printf("-->Adding client in %d\n", connfd);
+                    clients[i] = connfd;
+                    FD_SET(connfd, &clients_fd);
+                    break;
+                }
             }
+        }
 
-            int sort = get_sort_from_path(serving_directory_temp);
-            comprobate_path(serving_directory_temp, argv[2]);
+        check_clients();
 
-            if(serving_directory_temp[strlen(serving_directory_temp) - 1] == '/')
+        printf("--aquiiiiii\n");
+
+        for(int i = 0; i < 100; i++)
+        {
+            if(files_fd[i] != -1)
             {
-                strcpy(serving_directory, serving_directory_temp);
-                client_dir(serving_directory, connfd, strcmp(serving_directory, argv[2]), sort);
+                if(FD_ISSET(files_fd[i], &ready_clients_fd))
+                {
+                    printf("-->Sending %d to %d\n", files_fd[i], clients[client_files_fd[i]]);
+                    int sended = sendfile(clients[client_files_fd[i]], files_fd[i], NULL, files_stat[i].st_blksize);
+                    if(sended == -1)
+                    {
+                        printf("-->Closing %d\n", files_fd[i]);
+                        FD_CLR(files_fd[i], &clients_fd);
+                        FD_CLR(clients[client_files_fd[i]], &clients_fd);
+                        close(clients[client_files_fd[i]]);
+                        close(files_fd[i]);
+                        files_fd[i] = -1;
+                        clients[client_files_fd[i]] = -1;
+                        client_files_fd[i] = -1;
+                        files_bytes_sended[i] = 0;
+                    }
+                    files_bytes_sended[i] += sended;
+                }
             }
-            else
+        }
+        for(int i = 0; i < 100; i++)
+        {
+            if(files_fd[i] != -1)
             {
-                client_file(serving_directory_temp, connfd);
+                if(files_bytes_sended[i] == files_stat[i].st_size)
+                {
+                    printf("-->Closing %d\n", files_fd[i]);
+                    FD_CLR(files_fd[i], &clients_fd);
+                    FD_CLR(clients[client_files_fd[i]], &clients_fd);
+                    close(clients[client_files_fd[i]]);
+                    close(files_fd[i]);
+                    files_fd[i] = -1;
+                    client_files_fd[i] = -1;
+                    clients[client_files_fd[i]] = -1;
+                    files_bytes_sended[i] = 0;
+                }
             }
-            close(connfd);
         }
     }
     
-    close(connfd);
+    close(listefd);
     printf("--> Socket closed.\n");
 }

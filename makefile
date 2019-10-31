@@ -49,6 +49,7 @@ $(TESTS_DIR)/$(TARGET_DIR)/%: $(TESTS_DIR)/$(OBJ_DIR)/%.o $(OBJ)
 
 clean:
 	rm -rf bin
+	rm -rf obj
 	rm -rf tests/obj tests/bin tests/log
 
 compile: $(NECESSARY_DIRS) $(TARGET)
